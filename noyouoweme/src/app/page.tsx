@@ -1,20 +1,49 @@
 'use client'
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import PreviousMap_ from "postcss/lib/previous-map";
+import { useEffect, useRef, useState } from "react";
 
 export default function Home() {
   
-
+  const personInputRef = useRef<HTMLInputElement>(null);
 
   const [people, setPeople] = useState<{ id: number; name: string }[]>([]);
-  const [expenses, setExpenses] = useState<{ id: number; payer: string; splitBetween: number[] }[]>([]);
+  const [expenses, setExpenses] = useState<{ id: number; payer: string; cost: number; item: string; splitBetween: number[] }[]>([]); //SPLITBETWEEN = ID'S OF PEOPLE
 
   const [showAddPersonForm, setShowAddPersonForm] = useState(false);
   const [showAddExpenseForm, setShowAddExpenseForm] = useState(false);
 
   const [newExpense, setNewExpense] = useState("");
   const [newPerson, setNewPerson] = useState("");
+
+  const [newPayer, setNewPayer] = useState("");
+  const [newCost, setNewCost] = useState("");
+  const [newItem, setNewItem] = useState("");
+  const [newSplitBetween, setNewSplitBetween] = useState<number[]>([]);
+
+  useEffect(() => {
+    if (showAddPersonForm && personInputRef.current) {
+      personInputRef.current.focus();
+    }
+  }, [showAddPersonForm]);
+
+  useEffect(() => {
+    const savedPeople = localStorage.getItem("people");
+    const savedExpenses = localStorage.getItem("expenses");
+
+    if (savedPeople) setPeople(JSON.parse(savedPeople));
+    if (savedExpenses) setExpenses(JSON.parse(savedExpenses));
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("people", JSON.stringify(people));
+  }, [people]);
+
+  useEffect(() => {
+    localStorage.setItem("expenses", JSON.stringify(expenses));
+  }, [expenses]);
+
 
   const addPerson = () => {
     setShowAddPersonForm(true);
@@ -36,6 +65,7 @@ export default function Home() {
 
   const removeAllGroup = () => {
     setPeople([]);
+    setExpenses([]);
   }
 
   const handleSubmitPerson = (e) => {
@@ -52,14 +82,28 @@ export default function Home() {
 
   const handleSubmitExpense = (e) => {
     e.preventDefault();
-    if (!newExpense.trim()) return; 
+    console.log("Debugging Values:");
+    console.log("newPayer:", newPayer);
+    console.log("newCost:", newCost);
+    console.log("newSplitBetween:", newSplitBetween);
+    if (!newPayer || !newCost.trim() || newSplitBetween.length === 0) return;
 
-    const newEntry = { id: expenses.length + 1, name: newExpense, payer: newPayer, splitBetween: debtors  };
-    setPeople([...people, newEntry]); 
+    const newEntry = { 
+      id: expenses.length + 1, 
+      payer: newPayer, 
+      cost: parseFloat(newCost), 
+      item: newItem,
+      splitBetween: newSplitBetween,
+    };    
+    setExpenses([...expenses, newEntry]); 
 
-    setNewPerson(""); 
-    console.log("Added Person:", newPerson); 
-    closeAddPersonForm(); 
+    setNewExpense(""); 
+    setNewPayer(""); 
+    setNewCost(""); 
+    setNewItem("");
+    setNewSplitBetween([]);
+    console.log("Added Expense:", newPerson); 
+    closeAddExpenseForm(); 
   };
 
   return (
@@ -100,9 +144,14 @@ export default function Home() {
           <ul>
             {expenses.map((expense) => (
               <li key={expense.id}>
-                <h1>{expense.payer} paid for {expense.name} split between</h1> 
+                <h1>{people.find((person) => person.id === Number(expense.payer))?.name || "Unknown"} paid {expense.cost} for {expense.item} split between (
+                {expense.splitBetween.map((id) => {
+                  const person = people.find((p) => p.id === id);
+                  return person ? `${person.name} ` : "Unknown";
+                })})
+                </h1> 
               </li>
-            ))}
+            ))} <br></br>
           </ul>
         </div>
 
@@ -114,6 +163,7 @@ export default function Home() {
                   <h2 className="text-xl font-semibold mb-4">Add a Person</h2>
                   <form onSubmit={handleSubmitPerson}>
                     <input
+                      ref={personInputRef}
                       type="text"
                       value={newPerson}
                       onChange={(e) => setNewPerson(e.target.value)}
@@ -146,19 +196,27 @@ export default function Home() {
             <h2 className="text-xl font-semibold mb-4">Add an Expense</h2>
             <form onSubmit={handleSubmitExpense}>
               <p className="mb-2">Payer</p>
-              <select className="bg-black w-full mb-2">
+              <select className="bg-black w-full mb-2" value={newPayer}  onChange={(e) => setNewPayer(e.target.value)}>
+                <option value="" disabled>Select a Payer</option> {/* Placeholder option */}
+
                 {people.map((person) => (
                   <option key={person.id} value={person.id}>
                     {person.name}
                   </option>
                 ))}
               </select>
+              <p className="mb-2">Purchase Name</p>
+              <input placeholder="Food" className="bg-black mb-2 w-full" value={newItem} onChange={(e) => setNewItem(e.target.value)}></input>
               <p className="mb-2">Paid</p>
-              <input placeholder="$100" className="bg-black mb-2 w-full"></input>
+              <input placeholder="$100" className="bg-black mb-2 w-full" value={newCost} onChange={(e) => setNewCost(e.target.value)}></input>
               <p className="mb-2">Split Between</p>
               {people.map((person) => (
-                <label className="mr-2" key={person.id}>
-                  <input value={person.id} type="checkbox"></input>
+                <label className="mr-2" key={person.id} >
+                  <input value={person.id} type="checkbox" checked={newSplitBetween.includes(person.id)} onChange={(e) => {
+                    const id = Number(e.target.value);
+                    setNewSplitBetween((prev) =>
+                      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]);
+                  }}></input>
                   {person.name}
                 </label>
               ))}
