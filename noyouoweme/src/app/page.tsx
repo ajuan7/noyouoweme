@@ -10,9 +10,13 @@ export default function Home() {
 
   const [people, setPeople] = useState<{ id: number; name: string }[]>([]);
   const [expenses, setExpenses] = useState<{ id: number; payer: string; cost: number; item: string; splitBetween: number[] }[]>([]); //SPLITBETWEEN = ID'S OF PEOPLE
+  const [transactions, setTransactions] = useState<{ from: number; to: number; amount: number }[]>([]);
 
   const [showAddPersonForm, setShowAddPersonForm] = useState(false);
   const [showAddExpenseForm, setShowAddExpenseForm] = useState(false);
+
+  const [showBalancesForm, setShowBalancesForm] = useState(false);
+
 
   const [newExpense, setNewExpense] = useState("");
   const [newPerson, setNewPerson] = useState("");
@@ -53,6 +57,17 @@ export default function Home() {
   const addExpense = () => {
     setShowAddExpenseForm(true);
     if (!newExpense.trim()) return;
+  }
+
+  const showBalances = () => {
+    const balances = calculateBalances();
+    const transactions = settleDebts(balances);
+    setTransactions(transactions);
+    setShowBalancesForm(true);
+  }
+
+  const closeShowBalancesForm = () => {
+    setShowBalancesForm(false);
   }
 
   const closeAddPersonForm = () => {
@@ -106,29 +121,91 @@ export default function Home() {
     closeAddExpenseForm(); 
   };
 
+  const calculateBalances  = () => {
+    const balances: Record<number, number> = {};
+    people.forEach(p => {
+      balances[p.id] = 0;
+    });
+
+    expenses.forEach(e => {
+      e.splitBetween.forEach(s => {
+        const splitCost = e.cost / (e.splitBetween.length);
+        balances[s] -= splitCost;
+      })
+
+      balances[Number(e.payer)] = (balances[Number(e.payer)] || 0) + e.cost;
+      
+    })
+
+    console.log("Calculated Balances", balances);
+    return balances;
+
+  }
+
+  const settleDebts = (balances: Record<number, number>) => {
+    const debtors: { id: number; amount: number }[] = [];
+    const creditors: { id: number; amount: number }[] = [];
+
+    Object.entries(balances).forEach(([id, balance]) => {
+      const numericId = Number(id);
+      if (balance < 0){
+        debtors.push({id: numericId, amount: Math.abs(balance)});
+      } else if (balance > 0) {
+        creditors.push({id: numericId, amount: Math.abs(balance)});
+      }
+    });
+
+    const transactions: {from: number; to: number, amount: number}[] = [];
+
+    while (debtors.length && creditors.length) {
+      const debtor = debtors[0];
+      const creditor = creditors[0]; 
+
+      const amount = Math.min(debtor.amount, creditor.amount);
+
+      transactions.push({
+        from: debtor.id,
+        to: creditor.id,
+        amount,
+      });
+
+      debtor.amount -= amount;
+      creditor.amount -= amount;
+
+      if (debtor.amount === 0) debtors.shift();
+      if (creditor.amount === 0) creditors.shift();
+    }
+    console.log(transactions);
+    return transactions;
+  }
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
+    <div className="grid grid-rows-[20px_1fr_20px] items-center min-h-screen p-8 pb-20 gap-0 sm:p-20 font-[family-name:var(--font-geist-sans)]">
       <main className="flex flex-row gap-8 row-start-2 items-center sm:items-start">
-        <div className="float-left p-2 w-1/4">
+        <div className="float-left p-2 w-1/8 max-w-sm">
           <h1><b> No, YOU OWE ME! </b></h1> <br></br>
           <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
             <li className="mb-2"> Add People to Group. </li>
-            <li className="mb-2">Click on Person.</li>
-            <li className="mb-2">Modify Expenses.</li>
+            <li className="mb-2">Add Expenses.</li>
+            <li className="mb-2">Show Balance.</li>
           </ol>
+          <p>Algorithm.</p>
+          <p>Determine person balances. Classify debtors and creditors. Greedy settlement approach. Generate required transactions to settle balances.</p>
         </div>
 
-        <div className="float-right p-2 w-1/4">
+        <div className="float-right p-2 w-1/8">
           <h2 className="mb-2">Expenses Management </h2>
           <button onClick={addPerson} className="border p-1 hover:bg-gray-950 mb-2">Add Person</button>
           <br></br>
           <button onClick={addExpense} className="border p-1 hover:bg-gray-950 mb-2">Add Expense</button>
           <br></br>
+          <button onClick={showBalances} className="border p-1 hover:bg-gray-950 mb-2">Show Balance</button>
+          <br></br>
           <button onClick={removeAllGroup} className="border p-1 hover:bg-gray-950 mb-2">Reset All</button>
 
         </div>
 
-        <div className="float-right p-2 w-1/4">
+        <div className="float-right p-2 w-1/8">
           <h2><u>Group</u></h2>
           <ul>
             {people.map((person) => (
@@ -139,13 +216,13 @@ export default function Home() {
           </ul>
         </div>
 
-        <div className="float-right p-2 w-1/4">
+        <div className="float-right p-2 w-2/8">
           <h2><u>Expenses</u></h2>
           <ul>
             {expenses.map((expense) => (
               <li key={expense.id}>
                 <h1>{people.find((person) => person.id === Number(expense.payer))?.name || "Unknown"} paid {expense.cost} for {expense.item} split between (
-                {expense.splitBetween.map((id) => {
+                 {expense.splitBetween.map((id) => {
                   const person = people.find((p) => p.id === id);
                   return person ? `${person.name} ` : "Unknown";
                 })})
@@ -156,6 +233,35 @@ export default function Home() {
         </div>
 
       </main>
+      
+
+      {showBalancesForm &&  (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
+                <div className="bg-black p-6 rounded-lg shadow-lg">
+                  <h2 className="text-xl font-semibold mb-4">Calculated Balances</h2>
+                  <form>
+                    {transactions.map((t, index) => {
+                      const fromPerson = people.find((p) => p.id === t.from);
+                      const toPerson = people.find((p) => p.id === t.to);
+                      return (
+                       <p className="mb-2"> - {fromPerson?.name} pays {t.amount.toFixed(2)} to {toPerson?.name}</p>
+                      )
+                    })}
+                    
+                    <div className="flex justify-between">
+                      <button 
+                        type="button" 
+                        onClick={closeShowBalancesForm} 
+                        className="w-full text-white px-4 py-2 rounded hover:bg-gray-950"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+      )}
+
 
       {showAddPersonForm &&  (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
